@@ -4,23 +4,28 @@ import keyboard
 import pyperclip
 
 
-def paste_text(text: str, delay_ms: int = 150):
+def paste_text(text: str, delay_ms: int = 150, restore_clipboard: bool = False):
     """Inject text into the focused window via clipboard + Ctrl+V.
 
     Clipboard-paste (not simulated typing) is required for Hebrew/RTL text.
-    Restores the previous clipboard afterwards.
+    By default the result STAYS in the clipboard: restoring the old clipboard
+    too early races slow apps — they read it after the restore and paste the
+    old content instead. With restore_clipboard=True we wait a full second
+    before restoring, which is safe for all but the slowest apps.
     """
     if not text:
         return
-    try:
-        previous = pyperclip.paste()
-    except pyperclip.PyperclipException:
-        previous = None
+    previous = None
+    if restore_clipboard:
+        try:
+            previous = pyperclip.paste()
+        except pyperclip.PyperclipException:
+            pass
     pyperclip.copy(text)
     time.sleep(delay_ms / 1000)
     keyboard.send("ctrl+v")
-    time.sleep(delay_ms / 1000)
-    if previous is not None:
+    if restore_clipboard and previous is not None:
+        time.sleep(1.0)
         pyperclip.copy(previous)
 
 

@@ -33,6 +33,7 @@ class Config:
     input_device: int | None = None
     overlay: bool = True
     live_typing: bool = True
+    restore_clipboard: bool = False
     silence_seconds: float = 2.0
     silence_threshold: float = 0.008
     max_record_s: float = 120.0

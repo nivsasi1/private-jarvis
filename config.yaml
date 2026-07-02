@@ -30,6 +30,9 @@ dictionary: []
 #  - Preact
 
 paste_delay_ms: 150             # wait before/after Ctrl+V so the target app keeps up
+restore_clipboard: false        # false = the result stays in your clipboard (reliable);
+                                # true = restore old clipboard after 1s (slow apps may
+                                # paste the old content instead — the "echo" bug)
 input_device: null              # mic index from `--check`; null = system default
 overlay: true                   # floating always-on-top widget (record / HE-EN / quit)
 live_typing: true               # stream the draft into the target field while you speak,

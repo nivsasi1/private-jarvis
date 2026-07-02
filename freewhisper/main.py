@@ -165,7 +165,7 @@ class App:
                     print("[llm] cancelled by spoken command — nothing pasted")
                     return
                 self.history.appendleft(result)
-                paste_text(result, self.cfg.paste_delay_ms)
+                paste_text(result, self.cfg.paste_delay_ms, self.cfg.restore_clipboard)
             except Exception:
                 self._erase_live_typed()
                 traceback.print_exc()
