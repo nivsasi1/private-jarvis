@@ -20,7 +20,7 @@ beam_size: 5
 
 llm:
   enabled: true
-  url: http://localhost:11434
+  url: http://127.0.0.1:11434  # not "localhost" — Windows tries IPv6 first, +2s per request
   model: gemma3:12b             # best Hebrew quality; qwen2.5:7b is faster but garbles words
   timeout_s: 60                 # first call loads the model into VRAM and can be slow
 

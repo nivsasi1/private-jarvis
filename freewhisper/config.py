@@ -9,7 +9,7 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 @dataclass
 class LLMConfig:
     enabled: bool = True
-    url: str = "http://localhost:11434"
+    url: str = "http://127.0.0.1:11434"
     model: str = "gemma3:12b"
     timeout_s: int = 30
 
