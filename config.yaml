@@ -4,6 +4,8 @@ hotkey: ctrl+shift+space        # tap once to start recording (auto-stops on sil
 command_hotkey: ctrl+alt+c      # speak an instruction about the selected text (⚡)
 language_toggle_hotkey: ctrl+alt+l
 language: auto                  # auto | he | en — auto detects per dictation
+command_language: he            # ⚡ commands are short — auto-detect hallucinates on them,
+                                # so they're transcribed in this language when language=auto
 
 silence_seconds: 2              # stop recording after this much quiet
 silence_threshold: 0.008        # mic level counted as "talking" (see --test-mic)

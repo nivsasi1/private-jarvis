@@ -142,7 +142,12 @@ class App:
         with self.busy:
             self.state = "busy"
             try:
-                text = self.transcriber.transcribe(audio, self.language)
+                lang = self.language
+                if mode == "command" and lang == "auto":
+                    # short spoken commands make Whisper's auto-detect hallucinate;
+                    # commands are dictated in the user's main language
+                    lang = self.cfg.command_language
+                text = self.transcriber.transcribe(audio, lang)
                 if not text:
                     print("[stt] (nothing recognized — was the mic level near 0?)")
                     self._erase_live_typed()

@@ -18,12 +18,24 @@ def test_system_prompt_plain():
 
 
 def test_cancel_and_routing_regexes():
-    from freewhisper.cleaner import ANSWER_RE, CANCEL_RE, TO_EN_RE
+    from freewhisper.cleaner import ANSWER_RE, CANCEL_RE, TO_EN_RE, TO_HE_RE
     assert CANCEL_RE.search("אה לא רגע תמחק הכל")
     assert not CANCEL_RE.search("בסדר גמור וכדאי לראות")
     assert ANSWER_RE.match("תענה לי על השאלה הבאה כמה זה שתיים")
     assert ANSWER_RE.match("answer the next question what time is it")
-    assert TO_EN_RE.search("תכתוב את זה באנגלית היי אמא")
+    # every phrasing the user actually tried must route to translate
+    for t in (
+        "תכתוב את זה באנגלית היי אמא",
+        "תתרגמו לאנגלית מה איתכם",
+        "לכתוב באנגלית, מה איתכם",
+        "תתרגם את מה שאני אומר עכשיו לאנגלית מה איתכם",
+        "translate to English what about you",
+        "Translate to English. What about you?",
+    ):
+        assert TO_EN_RE.search(t), t
+    assert TO_HE_RE.search("translate to Hebrew how are you")
+    assert TO_HE_RE.search("תתרגם את זה לעברית how are you")
+    assert not TO_EN_RE.search("אני אוהב לדבר אנגלית עם חברים")
 
 
 def test_system_prompt_with_dictionary():

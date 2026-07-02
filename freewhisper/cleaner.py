@@ -12,12 +12,16 @@ ANSWER_RE = re.compile(
     r"^\s*(תענה לי על השאלה( הבאה)?|תענה על השאלה( הבאה)?|answer (me )?the next question|answer the question)[,.:!?]?\s*",
     re.IGNORECASE,
 )
+# any verb (translate/write/say, Hebrew or English, any conjugation) followed
+# within a few words by a target-language phrase — catches "תתרגמו לאנגלית",
+# "לכתוב באנגלית", "תתרגם את מה שאני אומר עכשיו לאנגלית", "translate to English"
+_VERB = r"(תתרגמו|תתרגם|תרגמו|תרגם|לתרגם|תכתוב|תכתבו|לכתוב|כתוב|תרשום|לרשום|translate|write|say)"
 TO_EN_RE = re.compile(
-    r"(תכתוב את זה באנגלית|תרשום את זה באנגלית|write (this|it) in english)[,.:!?]?\s*",
+    _VERB + r"[^.!?]{0,40}?(לאנגלית|באנגלית|(to|in|into) english)[,.:!?]?\s*",
     re.IGNORECASE,
 )
 TO_HE_RE = re.compile(
-    r"(תכתוב את זה בעברית|תרשום את זה בעברית|write (this|it) in hebrew)[,.:!?]?\s*",
+    _VERB + r"[^.!?]{0,40}?(לעברית|בעברית|(to|in|into) hebrew)[,.:!?]?\s*",
     re.IGNORECASE,
 )
 
@@ -49,6 +53,7 @@ Output the answer only, no preamble."""
 
 TRANSLATE_PROMPT = """The user dictated text by voice. Rewrite it as clean written {lang}:
 remove fillers (אה, אמ, um, uh), fix punctuation, apply spoken self-corrections.
+If leftover instruction words like "translate to {lang}" / "תתרגם" remain in the transcript, drop them — they are the command, not the content.
 Output ONLY the {lang} text, nothing else."""
 
 

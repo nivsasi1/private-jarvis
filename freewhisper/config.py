@@ -20,6 +20,7 @@ class Config:
     command_hotkey: str = "ctrl+alt+c"
     language_toggle_hotkey: str = "ctrl+alt+l"
     language: str = "auto"
+    command_language: str = "he"
     models: dict = field(default_factory=lambda: {
         "he": "ivrit-ai/whisper-large-v3-turbo-ct2",
         "en": "deepdml/faster-whisper-large-v3-turbo-ct2",
