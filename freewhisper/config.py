@@ -17,8 +17,9 @@ class LLMConfig:
 @dataclass
 class Config:
     hotkey: str = "ctrl+shift+space"
+    command_hotkey: str = "ctrl+alt+c"
     language_toggle_hotkey: str = "ctrl+alt+l"
-    language: str = "he"
+    language: str = "auto"
     models: dict = field(default_factory=lambda: {
         "he": "ivrit-ai/whisper-large-v3-turbo-ct2",
         "en": "deepdml/faster-whisper-large-v3-turbo-ct2",

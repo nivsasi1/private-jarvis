@@ -34,13 +34,20 @@ tap Ctrl+Shift+Space (or click the mic)
 
 | Action | How |
 |---|---|
-| Start dictating | **Ctrl+Shift+Space** or click the mic on the widget |
+| Start dictating | **Ctrl+Shift+Space** or click the 🎤 mic on the widget |
 | Stop | just stop talking (~2s), or tap the hotkey again |
-| Switch Hebrew ↔ English | **Ctrl+Alt+L** or click the **HE/EN** pill |
+| Command mode (⚡) | select text anywhere → **Ctrl+Alt+C** → speak an instruction ("translate to English", "תקצר את זה") — the result replaces/pastes |
+| Language | **Ctrl+Alt+L** or the pill cycles **AUTO → HE → EN** (auto detects per dictation) |
+| Copy last result | 📋 on the widget (turns ✔) |
+| History | 🕘 opens the last dictations — click a row to copy it |
 | Move the widget | drag it by the ⠿ grip |
 | Quit completely | **✕** on the widget, or tray icon → Quit |
 
-Widget colors: 🟣 idle · 🔴 recording (waveform follows your voice) · 🟠 processing.
+While you talk the widget expands: waveform bars dance with your voice and a **live transcript**
+streams underneath. Colors: 🟣 idle · 🔴 dictating · 🔵 command · 🟠 processing.
+
+The widget window is set `WS_EX_NOACTIVATE`, so clicking its buttons never steals focus —
+your cursor stays in the text field and the paste lands there.
 
 FreeWhisper starts automatically at login (shortcut in `shell:startup`) and runs windowless —
 logs go to `freewhisper.log`. A desktop shortcut launches it manually; a single-instance

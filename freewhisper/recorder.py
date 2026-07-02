@@ -44,9 +44,16 @@ class Recorder:
         self._stream.stop()
         self._stream.close()
         self._stream = None
-        if not self._chunks:
+        return self._to_16k(self._chunks)
+
+    def snapshot(self) -> np.ndarray:
+        """Audio captured so far, without stopping — for live partial transcripts."""
+        return self._to_16k(list(self._chunks))
+
+    def _to_16k(self, chunks) -> np.ndarray:
+        if not chunks:
             return np.zeros(0, dtype=np.float32)
-        audio = np.concatenate(self._chunks).flatten()
+        audio = np.concatenate(chunks).flatten()
         if self._rate != TARGET_RATE and audio.size:
             n = int(audio.size * TARGET_RATE / self._rate)
             audio = np.interp(

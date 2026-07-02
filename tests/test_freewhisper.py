@@ -6,7 +6,7 @@ from freewhisper.cleaner import build_system_prompt
 
 def test_config_loads_defaults():
     cfg = config_mod.load(Path(__file__).parent.parent / "config.yaml")
-    assert cfg.language in ("he", "en")
+    assert cfg.language in ("auto", "he", "en")
     assert "he" in cfg.models and "en" in cfg.models
     assert cfg.llm.url.startswith("http")
 

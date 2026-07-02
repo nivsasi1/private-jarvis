@@ -1,8 +1,9 @@
 # FreeWhisper settings
 hotkey: ctrl+shift+space        # tap once to start recording (auto-stops on silence)
                                 # (ctrl+alt+space is taken by Claude Desktop)
+command_hotkey: ctrl+alt+c      # speak an instruction about the selected text (⚡)
 language_toggle_hotkey: ctrl+alt+l
-language: he                    # he | en (switch via hotkey or the floating widget)
+language: auto                  # auto | he | en — auto detects per dictation
 
 silence_seconds: 2              # stop recording after this much quiet
 silence_threshold: 0.008        # mic level counted as "talking" (see --test-mic)
