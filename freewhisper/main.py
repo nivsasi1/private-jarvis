@@ -39,6 +39,7 @@ class App:
         self.typed = ""              # what live-typing has inserted into the target field
         self.type_lock = threading.Lock()
         self.history = deque(maxlen=20)
+        self.design = cfg.design
         self._overlay = None
         self._tray = None
 
@@ -183,6 +184,12 @@ class App:
         self.language = LANG_CYCLE[(i + 1) % len(LANG_CYCLE)]
         print(f"[cfg] language → {self.language}")
 
+    def cycle_design(self, *_):
+        from .overlay import DESIGNS
+        i = DESIGNS.index(self.design) if self.design in DESIGNS else 0
+        self.design = DESIGNS[(i + 1) % len(DESIGNS)]
+        print(f"[cfg] design → {self.design} (set `design:` in config.yaml to keep it)")
+
     def copy_last(self) -> bool:
         if not self.history:
             return False
@@ -219,6 +226,7 @@ class App:
             d.rectangle((28, 40, 36, 54), fill="white")
             menu = pystray.Menu(
                 pystray.MenuItem(lambda item: f"Language: {self.language} (cycle)", self.cycle_language),
+                pystray.MenuItem(lambda item: f"Design: {self.design} (cycle)", self.cycle_design),
                 pystray.MenuItem("Quit", self.quit),
             )
             self._tray = pystray.Icon("FreeWhisper", img, "FreeWhisper", menu)
@@ -252,6 +260,7 @@ class App:
                     get_language=lambda: self.language,
                     get_level=lambda: self.recorder.recent_rms(0.08) if self.recorder.recording else 0.0,
                     get_live_text=lambda: self.live_text,
+                    get_design=lambda: self.design,
                     on_record=self.toggle_recording,
                     on_command=self.toggle_command,
                     on_cycle_language=self.cycle_language,
