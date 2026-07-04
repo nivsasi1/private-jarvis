@@ -8,3 +8,7 @@ Pillow>=10
 requests>=2.32
 PyYAML>=6
 pytest>=8
+# --- jarvis voice assistant ---
+edge-tts>=6.1          # TTS voice (Hebrew + English)
+anthropic>=0.40        # optional cloud brain with tools
+selenium>=4.20         # visible browser Jarvis drives

@@ -38,6 +38,14 @@ class Config:
     silence_seconds: float = 2.0
     silence_threshold: float = 0.008
     max_record_s: float = 120.0
+    # --- jarvis ---
+    talk_hotkey: str = "ctrl+shift+j"
+    voice_he: str = "he-IL-AvriNeural"
+    voice_en: str = "en-GB-RyanNeural"
+    voice_rate: str = "+8%"
+    anthropic_key: str = ""
+    claude_model: str = "claude-sonnet-5"
+    chat_model: str = "gemma3:12b"
 
 
 def load(path: Path = CONFIG_PATH) -> Config:

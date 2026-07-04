@@ -8,6 +8,15 @@ language: auto                  # auto | he | en — auto detects per dictation
 command_language: he            # ⚡ commands are short — auto-detect hallucinates on them,
                                 # so they're transcribed in this language when language=auto
 
+# --- Jarvis (voice assistant, `python -m jarvis`) ---
+talk_hotkey: ctrl+shift+j       # press or click the core to talk to Jarvis
+voice_he: he-IL-AvriNeural      # edge-tts Hebrew voice (AvriNeural=male, HilaNeural=female)
+voice_en: en-GB-RyanNeural      # edge-tts English voice (British, Jarvis-ish)
+voice_rate: "+8%"
+anthropic_key: ""               # paste your Anthropic API key (or set ANTHROPIC_API_KEY env)
+claude_model: claude-sonnet-5   # cloud brain w/ tools (used when a key is present)
+chat_model: gemma3:12b          # local Ollama brain (used when no key)
+
 silence_seconds: 2              # stop recording after this much quiet
 silence_threshold: 0.008        # mic level counted as "talking" (see --test-mic)
 max_record_s: 120               # hard cap per dictation
