@@ -6,3 +6,5 @@ freewhisper.log
 jarvis.log
 secret.yaml
 jarvis_memory.db
+google_credentials.json
+google_token.json

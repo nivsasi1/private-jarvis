@@ -46,6 +46,14 @@ SCHEMAS = [
     {"name": "recall", "description": "Search the user's long-term memory for relevant facts.",
      "input_schema": {"type": "object", "properties": {
          "query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "read_emails", "description": "Read the user's recent Gmail inbox "
+     "(senders, subjects, snippets). Summarize naturally when asked.",
+     "input_schema": {"type": "object", "properties": {
+         "count": {"type": "integer", "description": "how many (default 8)"}}}},
+    {"name": "search_emails", "description": "Search Gmail with a query like "
+     "'from:bank', 'is:unread', 'subject:invoice'.",
+     "input_schema": {"type": "object", "properties": {
+         "query": {"type": "string"}}, "required": ["query"]}},
 ]
 
 APPS = {
@@ -57,10 +65,11 @@ APPS = {
 
 
 class Tools:
-    def __init__(self, on_event=None, memory=None):
+    def __init__(self, on_event=None, memory=None, gmail=None):
         self.on_event = on_event or (lambda s: None)
         self.browser = BrowserController()
         self.memory = memory
+        self.gmail = gmail
 
     def _ev(self, s):
         self.on_event(s)
@@ -139,3 +148,24 @@ class Tools:
             return "(no memory)"
         hits = self.memory.recall(query)
         return "\n".join(f"- {h}" for h in hits) if hits else "nothing relevant"
+
+    # --- gmail ---------------------------------------------------------------
+
+    def _emails(self, query, count):
+        if not self.gmail or not self.gmail.available():
+            return "(Gmail is not set up)"
+        try:
+            msgs = self.gmail.recent(count, query)
+        except Exception as e:
+            return f"(gmail error: {e})"
+        if not msgs:
+            return "no emails found"
+        return "\n".join(f"- {m['from']}: {m['subject']} — {m['snippet'][:90]}" for m in msgs)
+
+    def t_read_emails(self, count=8):
+        self._ev("📧 reading inbox")
+        return self._emails("", count)
+
+    def t_search_emails(self, query):
+        self._ev(f"📧 searching mail: {query[:30]}")
+        return self._emails(query, 8)

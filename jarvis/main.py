@@ -18,6 +18,7 @@ from freewhisper.recorder import Recorder, rms
 from freewhisper.transcriber import Transcriber
 
 from .brain import Brain
+from .gmail_tool import Gmail
 from .memory import Memory
 from .speaker import Speaker
 from .tools import Tools
@@ -39,7 +40,8 @@ class Jarvis:
         self.stt = Transcriber(cfg)
         self.speaker = Speaker(cfg)
         self.memory = Memory(cfg)
-        self.tools = Tools(on_event=self._on_tool, memory=self.memory)
+        self.gmail = Gmail()
+        self.tools = Tools(on_event=self._on_tool, memory=self.memory, gmail=self.gmail)
         self.brain = Brain(cfg, self.tools, memory=self.memory)
         self.wake = WakeWord(on_wake=self.talk,
                              is_busy=lambda: self.state != "idle",
@@ -202,17 +204,27 @@ def main():
     _log_if_windowless()
     ap = argparse.ArgumentParser(prog="jarvis")
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--auth-gmail", action="store_true", help="one-time Gmail browser authorization")
     args = ap.parse_args()
     cfg = config_mod.load()
+    if args.auth_gmail:
+        print(Gmail().authorize())
+        return
     if args.check:
         mem = Memory(cfg)
         b = Brain(cfg, Tools(), memory=mem)
         wake = WakeWord(lambda: None, lambda: False)
+        from .gmail_tool import TOKEN
+        gm = Gmail()
+        gmail_state = ("authorized" if TOKEN.exists()
+                       else "creds present — run --auth-gmail" if gm.available()
+                       else "no credentials")
         print("brain :", "Claude" if b.using_claude else "Ollama (no ANTHROPIC_API_KEY)")
         print("talk  :", cfg.talk_hotkey, "| say 'Hey Jarvis'")
         print("voice :", cfg.voice_he, "/", cfg.voice_en)
         print("memory:", mem.count(), "facts")
         print("wake  :", "openWakeWord ready" if wake.available() else "unavailable")
+        print("gmail :", gmail_state)
         return
     _keep = _lock()
     Jarvis(cfg).run()
