@@ -4,10 +4,18 @@ A local, futuristic voice assistant — talk to it, it talks back, and it can dr
 a real browser (you watch it open and close pages), check weather/time, launch
 apps, and search your files. Forked from FreeWhisper; see [PLAN.md](PLAN.md) for the roadmap.
 
+## Setup (one command)
+
+```powershell
+.\setup.ps1     # venv, deps, CUDA wheels, wake-word + Ollama models, shortcut
+```
+Then paste your Anthropic key into `secret.yaml`. For Gmail: drop `google_credentials.json`
+in the folder and run `.venv\Scripts\python -m jarvis --auth-gmail` once (opens a browser).
+
 ## Run
 
 ```powershell
-.venv\Scripts\python -m jarvis --check   # brain/voice/hotkey status
+.venv\Scripts\python -m jarvis --check   # brain/voice/hotkey/gmail status
 .venv\Scripts\python -m jarvis           # start (arc-reactor HUD appears)
 ```
 
