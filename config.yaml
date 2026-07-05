@@ -50,6 +50,7 @@ restore_clipboard: false        # false = the result stays in your clipboard (re
                                 # paste the old content instead — the "echo" bug)
 input_device: null              # mic index from `--check`; null = system default
 overlay: true                   # floating always-on-top widget (record / HE-EN / quit)
+screen: secondary               # primary | secondary | 0/1/2… — which monitor Jarvis opens on
 live_typing: true               # stream the draft into the target field while you speak,
                                 # then replace it with the clean version (don't move the
                                 # cursor mid-dictation!)

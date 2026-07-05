@@ -34,6 +34,7 @@ class Config:
     input_device: int | None = None
     overlay: bool = True
     live_typing: bool = True
+    screen: str = "secondary"      # primary | secondary | monitor index — where widgets open
     restore_clipboard: bool = False
     silence_seconds: float = 2.0
     silence_threshold: float = 0.008

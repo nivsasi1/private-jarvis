@@ -63,7 +63,7 @@ def _no_activate_off(win):
 
 class HUD:
     def __init__(self, get_state, get_level, get_user, get_reply, get_log,
-                 on_talk, on_submit, on_quit):
+                 on_talk, on_submit, on_quit, origin=None):
         import tkinter as tk
         self.tk = tk
         self.get_state = get_state
@@ -89,9 +89,11 @@ class HUD:
         root.attributes("-topmost", True)
         root.attributes("-transparentcolor", TRANS)
         root.configure(bg=TRANS)
-        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        self._origin = (sw - W - 28, sh - H - 56)
-        root.geometry(f"{W}x{H}+{self._origin[0]}+{self._origin[1]}")
+        if origin is None:
+            sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+            origin = (sw - W - 28, sh - H - 56)
+        self._origin = origin
+        root.geometry(f"{W}x{H}+{origin[0]}+{origin[1]}")
 
         c = tk.Canvas(root, width=W, height=H, bg=TRANS, highlightthickness=0)
         c.pack()
