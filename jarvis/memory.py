@@ -73,3 +73,28 @@ class Memory:
     def count(self) -> int:
         with self.lock:
             return self.db.execute("SELECT COUNT(*) FROM mem").fetchone()[0]
+
+    def consolidate(self, threshold: float = 0.9) -> int:
+        """Drop near-duplicate facts (cosine ≥ threshold), keeping the newest,
+        so memory doesn't bloat with restatements of the same thing."""
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id, emb FROM mem WHERE emb IS NOT NULL ORDER BY created DESC"
+            ).fetchall()
+        vecs = [(i, np.frombuffer(e, dtype=np.float32)) for i, e in rows]
+        vecs = [(i, v / (np.linalg.norm(v) + 1e-9)) for i, v in vecs]
+        remove = set()
+        for a in range(len(vecs)):
+            if vecs[a][0] in remove:
+                continue
+            for b in range(a + 1, len(vecs)):     # b is older (rows are newest-first)
+                if vecs[b][0] in remove:
+                    continue
+                if float(vecs[a][1] @ vecs[b][1]) >= threshold:
+                    remove.add(vecs[b][0])
+        if remove:
+            with self.lock:
+                self.db.executemany("DELETE FROM mem WHERE id=?", [(r,) for r in remove])
+                self.db.commit()
+            print(f"[memory] consolidated — removed {len(remove)} duplicate facts")
+        return len(remove)

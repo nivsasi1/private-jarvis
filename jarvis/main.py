@@ -159,6 +159,8 @@ class Jarvis:
               f"Press {self.cfg.talk_hotkey}, say 'Hey Jarvis', or click the orb.")
         if getattr(self.cfg, "wake_enabled", True):
             self.wake.start()
+        # tidy memory in the background so it doesn't bloat with duplicates
+        threading.Thread(target=self.memory.consolidate, daemon=True).start()
         greet = "ג'רוויס מוכן." if not self.brain.using_claude else "Jarvis online and ready."
         self.speaker.speak(greet)
 

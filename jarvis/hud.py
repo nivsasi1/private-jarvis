@@ -106,8 +106,10 @@ class HUD:
                               justify="right")
         self.entry.bind("<Return>", self._send)
         self.entry.bind("<Key>", lambda e: self._touch())
-        self.entry.bind("<FocusIn>", lambda e: self._touch())
+        self.entry.bind("<FocusIn>", self._on_focus_in)
+        self.entry.bind("<FocusOut>", self._on_focus_out)
         self._ph = "כתוב או דבר…"
+        self._ph_on = False
 
         c.tag_bind("orb", "<Button-1>", lambda e: self._orb_click())
         c.tag_bind("mic", "<Button-1>", lambda e: (self._touch(), self.on_talk()))
@@ -155,9 +157,30 @@ class HUD:
             self._touch()
             self.on_talk()
 
+    def _show_ph(self):
+        if not self._ph_on and not self.entry_var.get():
+            self._ph_on = True
+            self.entry.config(fg=MUTE)
+            self.entry_var.set(self._ph)
+
+    def _clear_ph(self):
+        if self._ph_on:
+            self._ph_on = False
+            self.entry_var.set("")
+            self.entry.config(fg=TXT)
+
+    def _on_focus_in(self, _):
+        self._touch()
+        self._clear_ph()
+
+    def _on_focus_out(self, _):
+        self._show_ph()
+
     def _send(self, _=None):
+        if self._ph_on:
+            return
         txt = self.entry_var.get().strip()
-        if not txt or txt == self._ph:
+        if not txt:
             return
         self.entry_var.set("")
         self._touch()
@@ -318,9 +341,10 @@ class HUD:
     def _place_entry(self, show):
         if show:
             if not self.entry.winfo_ismapped():
-                self.entry.place(x=24, y=H - 42, width=W - 150, height=24)
-                if not self.entry_var.get():
-                    self.entry_var.set("")
+                # span the input box's width so right-aligned text hugs the edge
+                self.entry.place(x=26, y=H - 47, width=W - 104, height=26)
+                if not self._focused():
+                    self._show_ph()
         else:
             if self.entry.winfo_ismapped():
                 self.entry.place_forget()
