@@ -250,9 +250,13 @@ class HUD:
         iy0, iy1 = H - 52, H - 16
         c.create_polygon(_rr(16, iy0, W - 108, iy1, 16), smooth=True, fill=CARD2,
                          outline=EDGE, width=1, tags="content")
-        # 📎 attach — green when an image is queued
-        c.create_text(W - 92, iy0 + 17, text="📎", font=("Segoe UI", 13),
-                      fill=(GREEN if self._pending_image else MUTE), tags=("content", "attach"))
+        # attach button — a "+" that turns green when an image is queued
+        acol = GREEN if self._pending_image else CYAN
+        c.create_oval(W - 102, iy0 + 1, W - 70, iy0 + 33, fill=CARD2,
+                      outline=(GREEN if self._pending_image else EDGE),
+                      tags=("content", "attach"))
+        c.create_text(W - 86, iy0 + 16, text="+", fill=acol,
+                      font=("Segoe UI", 16, "bold"), tags=("content", "attach"))
         c.create_oval(W - 64, iy0, W - 30, iy0 + 34, fill=CARD2, outline=EDGE, tags=("content", "send"))
         c.create_text(W - 47, iy0 + 17, text="➤", fill=CYAN, font=("Segoe UI", 12), tags=("content", "send"))
 
@@ -357,7 +361,7 @@ class HUD:
         if show:
             if not self.entry.winfo_ismapped():
                 # span the input box's width so right-aligned text hugs the edge
-                self.entry.place(x=26, y=H - 47, width=W - 104, height=26)
+                self.entry.place(x=26, y=H - 47, width=W - 140, height=26)
                 if not self._focused():
                     self._show_ph()
         else:
