@@ -85,10 +85,26 @@ class Jarvis:
             self.recorder.start()
             self.state = "listen"
             self.user_text = "…"
+            self.reply = ""
             print("[rec] ● listening")
             threading.Thread(target=self._watchdog, daemon=True).start()
+            threading.Thread(target=self._partial_loop, daemon=True).start()
         except Exception as e:
             print(f"[rec] mic error: {e}")
+
+    def _partial_loop(self):
+        """Live transcript while you speak — show your words as they're recognized."""
+        while self.state == "listen" and self.recorder.recording:
+            time.sleep(1.0)
+            if not self.recorder.recording:
+                return
+            try:
+                text = self.stt.partial(self.recorder.snapshot(), self.cfg.language)
+                if self.recorder.recording and text:
+                    self.user_text = text
+            except Exception as e:
+                print(f"[stt] partial: {e}")
+                return
 
     def _watchdog(self):
         started = last = time.time()

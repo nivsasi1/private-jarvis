@@ -21,6 +21,17 @@ import edge_tts
 
 _HEB = re.compile(r"[֐-׿]")
 
+# emojis/pictographs — kept on screen but never spoken aloud
+_EMOJI = re.compile(
+    "[\U0001F1E0-\U0001F1FF\U0001F300-\U0001F5FF\U0001F600-\U0001F64F"
+    "\U0001F680-\U0001F6FF\U0001F700-\U0001F9FF\U0001FA00-\U0001FAFF"
+    "\U00002600-\U000026FF\U00002700-\U000027BF\U00002B00-\U00002BFF"
+    "\U0000FE00-\U0000FE0F\U0000200D]+")
+
+
+def _speakable(text: str) -> str:
+    return re.sub(r"\s{2,}", " ", _EMOJI.sub("", text)).strip()
+
 
 def _mci(cmd: str) -> str:
     buf = ctypes.create_unicode_buffer(256)
@@ -79,6 +90,9 @@ class Speaker:
     # --- workers -------------------------------------------------------------
 
     def _synth(self, text: str) -> Path:
+        text = _speakable(text)
+        if not text:
+            return None                      # nothing left to say (e.g. emoji-only)
         voice = self.voice_he if _HEB.search(text) else self.voice_en
         path = Path(tempfile.gettempdir()) / f"jarvis_{uuid.uuid4().hex}.mp3"
 
@@ -95,6 +109,8 @@ class Speaker:
                 continue
             try:
                 path = self._synth(text)
+                if path is None:
+                    continue
                 if gen == self._gen:
                     self._play_q.put((gen, path))
                 else:
