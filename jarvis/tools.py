@@ -103,8 +103,10 @@ class Tools:
         key = name.lower().strip()
         target = APPS.get(key, key)
         self._ev(f"▶ opening {name}")
-        os.startfile(target) if ":" in target else subprocess.Popen(
-            f'start "" "{target}"', shell=True)
+        if ":" in target:                       # e.g. ms-settings:
+            os.startfile(target)
+        else:                                   # no shell=True → no injection surface
+            subprocess.Popen(["cmd", "/c", "start", "", target])
         return f"opened {name}"
 
     def t_search_files(self, query):

@@ -49,7 +49,7 @@ class Speaker:
         self._play_q: "queue.Queue" = queue.Queue()
         self._alias = None
         self._playing = threading.Event()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()   # reentrant: start_turn() -> _stop_current()
         threading.Thread(target=self._synth_worker, daemon=True).start()
         threading.Thread(target=self._play_worker, daemon=True).start()
 
@@ -99,7 +99,11 @@ class Speaker:
         async def run():
             await edge_tts.Communicate(text, voice, rate=self.rate).save(str(path))
 
-        asyncio.new_event_loop().run_until_complete(run())
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(run())
+        finally:
+            loop.close()               # don't leak an event loop per sentence
         return path
 
     def _synth_worker(self):
@@ -127,7 +131,8 @@ class Speaker:
             self._playing.set()
             try:
                 alias = f"jv{uuid.uuid4().hex[:8]}"
-                self._alias = alias
+                with self._lock:
+                    self._alias = alias
                 _mci(f'open "{path}" alias {alias}')
                 _mci(f"play {alias} wait")
             except Exception as e:
@@ -139,10 +144,11 @@ class Speaker:
                     self._playing.clear()
 
     def _stop_current(self):
-        if self._alias:
-            _mci(f"stop {self._alias}")
-            _mci(f"close {self._alias}")
-            self._alias = None
+        with self._lock:
+            alias, self._alias = self._alias, None
+        if alias:
+            _mci(f"stop {alias}")
+            _mci(f"close {alias}")
 
 
 def _drain(q: "queue.Queue"):

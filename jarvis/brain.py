@@ -26,6 +26,23 @@ PERSONA = (
 )
 
 
+def _image_block(data_b64: str, media_type: str) -> dict:
+    return {"type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": data_b64}}
+
+
+def _image_block_from_file(path):
+    import base64
+    import mimetypes
+    try:
+        with open(path, "rb") as f:
+            data = base64.b64encode(f.read()).decode()
+        return _image_block(data, mimetypes.guess_type(path)[0] or "image/png")
+    except Exception as e:
+        print(f"[brain] could not read image {path}: {e}")
+        return None
+
+
 class Brain:
     def __init__(self, cfg, tools, memory=None):
         self.cfg = cfg
@@ -103,44 +120,43 @@ class Brain:
         model = getattr(self.cfg, "claude_model", "claude-sonnet-5")
         msgs = [m for m in self.history]
         if image:  # attach the picked image to the latest user turn
-            import base64
-            import mimetypes
-            data = base64.b64encode(open(image, "rb").read()).decode()
-            media = mimetypes.guess_type(image)[0] or "image/png"
-            txt = msgs[-1]["content"] if isinstance(msgs[-1].get("content"), str) else ""
-            msgs[-1] = {"role": "user", "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": media, "data": data}},
-                {"type": "text", "text": txt or "(look at this image)"}]}
-        for _ in range(6):  # tool-use rounds
-            with self._client.messages.stream(model=model, max_tokens=1024,
-                                              system=system, tools=SCHEMAS,
-                                              messages=msgs) as stream:
-                for event in stream:
-                    if event.type == "content_block_delta" and \
-                            getattr(event.delta, "type", "") == "text_delta":
-                        emit(event.delta.text)
-                final = stream.get_final_message()
-            flush()  # speak any remaining narration before running tools
-            if final.stop_reason == "tool_use":
-                msgs.append({"role": "assistant", "content": final.content})
-                results = []
-                for block in final.content:
-                    if block.type == "tool_use":
-                        out = self.tools.dispatch(block.name, block.input)
-                        if isinstance(out, dict) and "__image__" in out:
-                            content = [
-                                {"type": "image", "source": {
-                                    "type": "base64", "media_type": out["media_type"],
-                                    "data": out["__image__"]}},
-                                {"type": "text", "text": "(the user's current screen)"}]
-                        else:
-                            content = str(out)
-                        results.append({"type": "tool_result", "tool_use_id": block.id,
-                                        "content": content})
-                msgs.append({"role": "user", "content": results})
-                continue
-            return "".join(all_text).strip() or "לא הצלחתי לסיים."
-        return "".join(all_text).strip() or "לא הצלחתי לסיים את הפעולה."
+            blk = _image_block_from_file(image)
+            if blk:
+                txt = msgs[-1]["content"] if isinstance(msgs[-1].get("content"), str) else ""
+                msgs[-1] = {"role": "user", "content":
+                            [blk, {"type": "text", "text": txt or "(look at this image)"}]}
+        try:
+            for _ in range(6):  # tool-use rounds
+                with self._client.messages.stream(model=model, max_tokens=1024,
+                                                  system=system, tools=SCHEMAS,
+                                                  messages=msgs) as stream:
+                    for event in stream:
+                        if event.type == "content_block_delta" and \
+                                getattr(event.delta, "type", "") == "text_delta":
+                            emit(event.delta.text)
+                    final = stream.get_final_message()
+                flush()  # speak any remaining narration before running tools
+                if final.stop_reason == "tool_use":
+                    msgs.append({"role": "assistant", "content": final.content})
+                    results = []
+                    for block in final.content:
+                        if block.type == "tool_use":
+                            out = self.tools.dispatch(block.name, block.input)
+                            if isinstance(out, dict) and "__image__" in out:
+                                content = [_image_block(out["__image__"], out["media_type"]),
+                                           {"type": "text", "text": "(the user's current screen)"}]
+                            else:
+                                content = str(out)
+                            results.append({"type": "tool_result", "tool_use_id": block.id,
+                                            "content": content})
+                    msgs.append({"role": "user", "content": results})
+                    continue
+                break
+        except Exception as e:                       # bad key/model/network — don't crash the turn
+            print(f"[brain] Claude error: {e}")
+            if not all_text:
+                return "מצטער, נתקלתי בבעיה עם המוח בענן."
+        return "".join(all_text).strip() or "לא הצלחתי לסיים."
 
     # --- Ollama (chat only) --------------------------------------------------
 

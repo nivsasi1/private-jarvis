@@ -56,11 +56,6 @@ def _blend(c1, c2, f):
     return "#" + "".join(f"{round(x + (y - x) * f):02x}" for x, y in zip(a, b))
 
 
-def _no_activate_off(win):
-    # ensure the window CAN take focus (needed for the text field)
-    win.update_idletasks()
-
-
 class HUD:
     def __init__(self, get_state, get_level, get_user, get_reply, get_log,
                  on_talk, on_submit, on_quit, origin=None):

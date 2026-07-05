@@ -81,6 +81,8 @@ class Jarvis:
                          daemon=True).start()
 
     def _start_listen(self):
+        if self.recorder.recording or self.state != "idle":
+            return                       # ignore double-trigger (wake + hotkey together)
         try:
             self.recorder.start()
             self.state = "listen"
@@ -173,6 +175,10 @@ class Jarvis:
         try:
             import keyboard
             keyboard.unhook_all()
+        except Exception:
+            pass
+        try:
+            self.tools.browser.close_all()   # don't leave Chrome windows behind
         except Exception:
             pass
         if self._hud:
