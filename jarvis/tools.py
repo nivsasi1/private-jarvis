@@ -54,6 +54,9 @@ SCHEMAS = [
      "'from:bank', 'is:unread', 'subject:invoice'.",
      "input_schema": {"type": "object", "properties": {
          "query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "see_screen", "description": "Capture and look at the user's current "
+     "screen to answer questions about what is displayed on it.",
+     "input_schema": {"type": "object", "properties": {}}},
 ]
 
 APPS = {
@@ -169,3 +172,21 @@ class Tools:
     def t_search_emails(self, query):
         self._ev(f"📧 searching mail: {query[:30]}")
         return self._emails(query, 8)
+
+    # --- vision --------------------------------------------------------------
+
+    def t_see_screen(self):
+        self._ev("👁 looking at the screen")
+        try:
+            import base64
+            import io
+
+            from PIL import ImageGrab
+            img = ImageGrab.grab()
+            img.thumbnail((1500, 1500))          # keep the payload reasonable
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="PNG")
+            return {"__image__": base64.b64encode(buf.getvalue()).decode(),
+                    "media_type": "image/png"}
+        except Exception as e:
+            return f"(screen capture failed: {e})"

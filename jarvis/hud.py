@@ -110,12 +110,14 @@ class HUD:
         self.entry.bind("<FocusOut>", self._on_focus_out)
         self._ph = "כתוב או דבר…"
         self._ph_on = False
+        self._pending_image = None
 
         c.tag_bind("orb", "<Button-1>", lambda e: self._orb_click())
         c.tag_bind("mic", "<Button-1>", lambda e: (self._touch(), self.on_talk()))
         c.tag_bind("send", "<Button-1>", lambda e: self._send())
+        c.tag_bind("attach", "<Button-1>", lambda e: self._attach())
         c.tag_bind("x", "<Button-1>", lambda e: self.on_quit())
-        for t in ("orb", "mic", "send", "x"):
+        for t in ("orb", "mic", "send", "attach", "x"):
             c.tag_bind(t, "<Enter>", lambda e: c.config(cursor="hand2"))
             c.tag_bind(t, "<Leave>", lambda e: c.config(cursor=""))
         c.tag_bind("hdr", "<ButtonPress-1>", self._press)
@@ -176,15 +178,24 @@ class HUD:
     def _on_focus_out(self, _):
         self._show_ph()
 
+    def _attach(self):
+        self._touch()
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(
+            title="Attach an image",
+            filetypes=[("Images", "*.png *.jpg *.jpeg *.gif *.webp *.bmp")])
+        if path:
+            self._pending_image = path
+
     def _send(self, _=None):
-        if self._ph_on:
-            return
-        txt = self.entry_var.get().strip()
-        if not txt:
+        img = self._pending_image
+        txt = "" if self._ph_on else self.entry_var.get().strip()
+        if not txt and not img:
             return
         self.entry_var.set("")
+        self._pending_image = None
         self._touch()
-        self.on_submit(txt)
+        self.on_submit(txt, img)
 
     def _press(self, e):
         self._off = (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())
@@ -235,10 +246,13 @@ class HUD:
             c.create_text(W // 2, min(y + 6, H - 70), text=log, fill=MUTE,
                           font=("Consolas", 8), tags="content")
 
-        # input bar + send/mic buttons
+        # input bar + attach / send buttons
         iy0, iy1 = H - 52, H - 16
-        c.create_polygon(_rr(16, iy0, W - 74, iy1, 16), smooth=True, fill=CARD2,
+        c.create_polygon(_rr(16, iy0, W - 108, iy1, 16), smooth=True, fill=CARD2,
                          outline=EDGE, width=1, tags="content")
+        # 📎 attach — green when an image is queued
+        c.create_text(W - 92, iy0 + 17, text="📎", font=("Segoe UI", 13),
+                      fill=(GREEN if self._pending_image else MUTE), tags=("content", "attach"))
         c.create_oval(W - 64, iy0, W - 30, iy0 + 34, fill=CARD2, outline=EDGE, tags=("content", "send"))
         c.create_text(W - 47, iy0 + 17, text="➤", fill=CYAN, font=("Segoe UI", 12), tags=("content", "send"))
 
@@ -330,7 +344,8 @@ class HUD:
         self.root.after(40, self._poll)
 
     def _sig(self):
-        return (self.get_user(), self.get_reply(), self.get_log(), self.get_state())
+        return (self.get_user(), self.get_reply(), self.get_log(),
+                self.get_state(), bool(self._pending_image))
 
     def _focused(self):
         try:

@@ -16,7 +16,8 @@ PERSONA = (
     "You speak back out loud, so keep replies short and natural — a sentence or two, no lists "
     "unless asked. Reply in the user's language (Hebrew or English). "
     "You have tools to open/close real browser pages, check weather, time, files, launch apps, "
-    "and read/search the user's Gmail (read-only — summarize inbox, find emails). "
+    "read/search the user's Gmail (read-only — summarize inbox, find emails), "
+    "see the user's screen with see_screen when they ask what's on it, and look at images they attach. "
     "You also have long-term memory: call remember() when the user shares something worth keeping "
     "(preferences, names, facts, 'remember that...'), and recall() when you need past context. "
     "Relevant memories are also injected for you each turn. "
@@ -54,7 +55,7 @@ class Brain:
                     "\n".join(f"- {f}" for f in facts)
         return PERSONA
 
-    def think(self, user_text: str, on_delta=None, on_sentence=None) -> str:
+    def think(self, user_text: str, on_delta=None, on_sentence=None, image=None) -> str:
         """Return the reply. If streaming callbacks are given (Claude path),
         on_delta(chunk) fires per token and on_sentence(sentence) per finished
         sentence so the caller can show text live and speak sentence-by-sentence."""
@@ -62,7 +63,7 @@ class Brain:
         self.history = self.history[-self.max_turns * 2:]
         system = self._system(user_text)
         if self.using_claude:
-            reply = self._think_claude(system, on_delta, on_sentence)
+            reply = self._think_claude(system, on_delta, on_sentence, image=image)
         else:
             reply = self._think_ollama(system)
             if on_sentence:
@@ -72,7 +73,7 @@ class Brain:
 
     # --- Claude (tools) ------------------------------------------------------
 
-    def _think_claude(self, system, on_delta=None, on_sentence=None) -> str:
+    def _think_claude(self, system, on_delta=None, on_sentence=None, image=None) -> str:
         import re
 
         from .tools import SCHEMAS
@@ -101,6 +102,15 @@ class Brain:
 
         model = getattr(self.cfg, "claude_model", "claude-sonnet-5")
         msgs = [m for m in self.history]
+        if image:  # attach the picked image to the latest user turn
+            import base64
+            import mimetypes
+            data = base64.b64encode(open(image, "rb").read()).decode()
+            media = mimetypes.guess_type(image)[0] or "image/png"
+            txt = msgs[-1]["content"] if isinstance(msgs[-1].get("content"), str) else ""
+            msgs[-1] = {"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media, "data": data}},
+                {"type": "text", "text": txt or "(look at this image)"}]}
         for _ in range(6):  # tool-use rounds
             with self._client.messages.stream(model=model, max_tokens=1024,
                                               system=system, tools=SCHEMAS,
@@ -117,8 +127,16 @@ class Brain:
                 for block in final.content:
                     if block.type == "tool_use":
                         out = self.tools.dispatch(block.name, block.input)
+                        if isinstance(out, dict) and "__image__" in out:
+                            content = [
+                                {"type": "image", "source": {
+                                    "type": "base64", "media_type": out["media_type"],
+                                    "data": out["__image__"]}},
+                                {"type": "text", "text": "(the user's current screen)"}]
+                        else:
+                            content = str(out)
                         results.append({"type": "tool_result", "tool_use_id": block.id,
-                                        "content": str(out)})
+                                        "content": content})
                 msgs.append({"role": "user", "content": results})
                 continue
             return "".join(all_text).strip() or "לא הצלחתי לסיים."

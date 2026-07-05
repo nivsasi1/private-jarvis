@@ -69,14 +69,16 @@ class Jarvis:
             self.speaker.stop()      # barge-in: silence Jarvis and listen again
             self._start_listen()
 
-    def submit_text(self, text):
-        """Typed input from the HUD field — same brain path as voice, no STT."""
+    def submit_text(self, text, image=None):
+        """Typed input from the HUD field — same brain path as voice, no STT.
+        image (optional file path) is sent to the vision model with the message."""
         text = (text or "").strip()
-        if not text or self.state in ("think", "speak"):
+        if (not text and not image) or self.state in ("think", "speak"):
             return
         if self.recorder.recording:
             self.recorder.stop()
-        threading.Thread(target=self._respond, args=(text,), daemon=True).start()
+        threading.Thread(target=self._respond, args=(text or "מה זה?", image),
+                         daemon=True).start()
 
     def _start_listen(self):
         try:
@@ -119,12 +121,12 @@ class Jarvis:
                 return
         self._respond(text)
 
-    def _respond(self, text):
+    def _respond(self, text, image=None):
         with self.busy:
             self.state = "think"
             try:
-                print(f"[you] {text}")
-                self.user_text = text
+                print(f"[you] {text}" + (" [+image]" if image else ""))
+                self.user_text = ("🖼 " if image else "") + text
                 self.reply = ""
                 gen = self.speaker.start_turn()
                 started = [False]
@@ -137,7 +139,7 @@ class Jarvis:
 
                 reply = self.brain.think(
                     text, on_delta=on_delta,
-                    on_sentence=lambda s: self.speaker.feed(gen, s))
+                    on_sentence=lambda s: self.speaker.feed(gen, s), image=image)
                 print(f"[jarvis] {reply}")
                 self.reply = reply or self.reply
                 self.state = "speak"
