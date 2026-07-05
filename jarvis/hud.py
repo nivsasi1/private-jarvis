@@ -1,17 +1,18 @@
-"""Jarvis HUD — a modern AI-assistant panel.
+"""Jarvis HUD — a collapsible AI-assistant panel.
 
-A glassy dark card: the arc-reactor orb as a live status avatar up top, a
-conversation area with chat bubbles (you vs. Jarvis) and an action log, and a
-text field at the bottom so you can TYPE to Jarvis as well as talk. The orb
-animates by state (idle/listen/think/speak).
+Collapsed by default: a small floating arc-reactor orb ("closed chat") in the
+corner. When you talk (wake word / hotkey / mic) or click the orb to type, it
+animates OPEN into a full chat panel — header, chat bubbles, and a text field.
+After ~10s of no interaction it animates closed again.
 
-Runs on the main thread; worker state read via a 60ms poll. Unlike FreeWhisper's
-overlay this window IS focusable — you need that to type — but it stays
-always-on-top and frameless.
+Runs on the main thread; worker state read via a 40ms poll. The window is a
+fixed frameless always-on-top canvas; -transparentcolor makes the unused area
+transparent and click-through, so the collapsed orb floats free.
 """
 
 import ctypes
 import math
+import time
 
 TRANS = "#010203"
 CARD = "#0e1220"
@@ -29,8 +30,14 @@ JV_FG = "#c8f6ff"
 STATE_COLOR = {"idle": CYAN, "listen": CYAN, "think": AMBER, "speak": GREEN}
 STATE_LABEL = {"idle": "מוכן", "listen": "מקשיב…", "think": "חושב…", "speak": "מדבר…"}
 
-W, H = 360, 452
-OCX, OCY, OR = 42, 46, 24       # mini orb
+W, H = 360, 464
+COLLAPSE_AFTER = 10.0            # seconds idle → close
+# orb positions (collapsed corner button ↔ expanded header)
+ORB_C = (W - 42, H - 42, 24)     # x, y, r  collapsed
+ORB_E = (42, 46, 24)             # expanded (header)
+# card rects (collapsed small button ↔ expanded full panel)
+RECT_C = (W - 78, H - 78, W - 6, H - 6)
+RECT_E = (2, 2, W - 2, H - 2)
 
 
 def _rr(x1, y1, x2, y2, r):
@@ -38,11 +45,20 @@ def _rr(x1, y1, x2, y2, r):
             x2 - r, y2, x1 + r, y2, x1, y2, x1, y2 - r, x1, y1 + r, x1, y1]
 
 
+def _lerp(a, b, e):
+    return a + (b - a) * e
+
+
 def _blend(c1, c2, f):
     f = max(0.0, min(1.0, f))
     a = [int(c1[i:i + 2], 16) for i in (1, 3, 5)]
     b = [int(c2[i:i + 2], 16) for i in (1, 3, 5)]
     return "#" + "".join(f"{round(x + (y - x) * f):02x}" for x, y in zip(a, b))
+
+
+def _no_activate_off(win):
+    # ensure the window CAN take focus (needed for the text field)
+    win.update_idletasks()
 
 
 class HUD:
@@ -55,7 +71,16 @@ class HUD:
         self.get_user = get_user
         self.get_reply = get_reply
         self.get_log = get_log
+        self.on_talk = on_talk
         self.on_submit = on_submit
+        self.on_quit = on_quit
+
+        self.e = 0.0              # expansion 0..1 (animated)
+        self.target = 0.0
+        self._t = 0.0
+        self._amp = 0.0
+        self._last_act = time.time()
+        self._last_sig = None
 
         root = tk.Tk()
         self.root = root
@@ -65,127 +90,116 @@ class HUD:
         root.attributes("-transparentcolor", TRANS)
         root.configure(bg=TRANS)
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"{W}x{H}+{sw - W - 40}+{sh - H - 70}")
+        self._origin = (sw - W - 28, sh - H - 56)
+        root.geometry(f"{W}x{H}+{self._origin[0]}+{self._origin[1]}")
 
         c = tk.Canvas(root, width=W, height=H, bg=TRANS, highlightthickness=0)
         c.pack()
         self.canvas = c
-        self._t = 0.0
-        self._amp = 0.0
-        self._last = None
 
-        # card
-        c.create_polygon(_rr(2, 2, W - 2, H - 2, 22), smooth=True, fill=CARD,
-                         outline=EDGE, width=1.5)
-        # header
-        c.create_text(78, 34, text="JARVIS", anchor="w", fill=CYAN,
-                      font=("Segoe UI Semibold", 15))
-        c.create_text(78, 54, text="voice assistant", anchor="w", fill=MUTE,
-                      font=("Segoe UI", 8))
-        self.status = c.create_text(W - 20, 34, text="", anchor="e", fill=CYAN,
-                                    font=("Segoe UI", 9, "bold"))
-        self.x_btn = c.create_text(W - 20, 54, text="✕ סגור", anchor="e", fill=MUTE,
-                                   font=("Segoe UI", 8), tags="x")
-        c.create_line(20, 78, W - 20, 78, fill=EDGE)
-
-        # conversation area is redrawn on demand (tag "conv")
-        # input bar
-        iy0, iy1 = H - 52, H - 16
-        c.create_polygon(_rr(16, iy0, W - 74, iy1, 16), smooth=True, fill=CARD2,
-                         outline=EDGE, width=1, tags="inpbg")
+        # text input (placed only when expanded)
         self.entry_var = tk.StringVar()
-        self.entry = tk.Entry(root, textvariable=self.entry_var, bd=0,
-                              bg=CARD2, fg=TXT, insertbackground=CYAN,
-                              font=("Segoe UI", 11), justify="right")
-        c.create_window(24, (iy0 + iy1) // 2, anchor="w", window=self.entry,
-                        width=W - 150, height=26)
+        self.entry = tk.Entry(root, textvariable=self.entry_var, bd=0, bg=CARD2,
+                              fg=TXT, insertbackground=CYAN, font=("Segoe UI", 11),
+                              justify="right")
         self.entry.bind("<Return>", self._send)
-        self.entry.insert(0, "")
+        self.entry.bind("<Key>", lambda e: self._touch())
+        self.entry.bind("<FocusIn>", lambda e: self._touch())
         self._ph = "כתוב או דבר…"
-        self._set_placeholder()
-        self.entry.bind("<FocusIn>", self._clear_placeholder)
-        self.entry.bind("<FocusOut>", self._set_placeholder_evt)
 
-        # send + mic buttons
-        c.create_oval(W - 64, iy0, W - 64 + 34, iy0 + 34, fill=CARD2, outline=EDGE,
-                      tags="send")
-        c.create_text(W - 64 + 17, iy0 + 17, text="➤", fill=CYAN,
-                      font=("Segoe UI", 12), tags="send")
-        c.create_oval(W - 62, iy0 - 44, W - 62 + 30, iy0 - 44 + 30, fill=CARD2,
-                      outline=EDGE, tags="micbtn")
-        c.create_text(W - 62 + 15, iy0 - 44 + 15, text="🎤", font=("Segoe UI", 11),
-                      tags="micbtn")
-
-        c.tag_bind("x", "<Button-1>", lambda e: on_quit())
+        c.tag_bind("orb", "<Button-1>", lambda e: self._orb_click())
+        c.tag_bind("mic", "<Button-1>", lambda e: (self._touch(), self.on_talk()))
         c.tag_bind("send", "<Button-1>", lambda e: self._send())
-        c.tag_bind("micbtn", "<Button-1>", lambda e: on_talk())
-        c.tag_bind("orb", "<Button-1>", lambda e: on_talk())
-        for t in ("x", "send", "micbtn", "orb"):
+        c.tag_bind("x", "<Button-1>", lambda e: self.on_quit())
+        for t in ("orb", "mic", "send", "x"):
             c.tag_bind(t, "<Enter>", lambda e: c.config(cursor="hand2"))
             c.tag_bind(t, "<Leave>", lambda e: c.config(cursor=""))
-        # drag by header
-        c.bind("<ButtonPress-1>", self._press)
-        c.bind("<B1-Motion>", self._drag)
+        c.tag_bind("hdr", "<ButtonPress-1>", self._press)
+        c.tag_bind("hdr", "<B1-Motion>", self._drag)
+        c.bind("<Enter>", lambda e: self._touch())
 
         self._off = (0, 0)
         self._poll()
 
-    # --- input ---------------------------------------------------------------
+    # --- open/close ----------------------------------------------------------
 
-    def _set_placeholder(self):
-        if not self.entry_var.get():
-            self.entry.config(fg=MUTE)
-            self.entry_var.set(self._ph)
+    def _touch(self):
+        self._last_act = time.time()
 
-    def _set_placeholder_evt(self, _):
-        self._set_placeholder()
+    def _expand(self, focus=False):
+        self.target = 1.0
+        self._touch()
+        if focus:
+            self.root.after(180, self._focus_entry)
 
-    def _clear_placeholder(self, _):
-        if self.entry_var.get() == self._ph:
-            self.entry_var.set("")
-            self.entry.config(fg=TXT)
+    def _focus_entry(self):
+        try:
+            self.root.focus_force()
+            self.entry.focus_set()
+        except Exception:
+            pass
+
+    def _collapse(self):
+        self.target = 0.0
+        try:
+            self.root.focus_set()
+        except Exception:
+            pass
+
+    def _orb_click(self):
+        if self.e < 0.5:          # collapsed → open for typing
+            self._expand(focus=True)
+        else:                      # already open → treat as talk toggle
+            self._touch()
+            self.on_talk()
 
     def _send(self, _=None):
         txt = self.entry_var.get().strip()
         if not txt or txt == self._ph:
             return
         self.entry_var.set("")
+        self._touch()
         self.on_submit(txt)
 
-    # --- drag ----------------------------------------------------------------
-
     def _press(self, e):
-        if e.y < 78:  # only the header drags
-            self._off = (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())
-            self._drag_ok = True
-        else:
-            self._drag_ok = False
+        self._off = (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())
 
     def _drag(self, e):
-        if getattr(self, "_drag_ok", False):
-            dx, dy = self._off
-            self.root.geometry(f"+{e.x_root - dx}+{e.y_root - dy}")
+        dx, dy = self._off
+        self.root.geometry(f"+{e.x_root - dx}+{e.y_root - dy}")
 
-    # --- conversation --------------------------------------------------------
+    # --- conversation bubbles ------------------------------------------------
 
     def _bubble(self, y, side, text, bg, fg):
         c = self.canvas
-        maxw = 236
-        padx, pady = 14, 11
         tx = W - 28 if side == "right" else 28
         t = c.create_text(tx, y, text=text, anchor="n" + ("e" if side == "right" else "w"),
-                          fill=fg, width=maxw, font=("Segoe UI", 11),
-                          justify="right", tags="conv")
+                          fill=fg, width=236, font=("Segoe UI", 11),
+                          justify="right", tags="content")
         b = c.bbox(t)
-        rect = _rr(b[0] - padx, b[1] - pady, b[2] + padx, b[3] + pady, 14)
-        r = c.create_polygon(rect, smooth=True, fill=bg, outline="", tags="conv")
+        r = c.create_polygon(_rr(b[0] - 14, b[1] - 11, b[2] + 14, b[3] + 11, 14),
+                             smooth=True, fill=bg, outline="", tags="content")
         c.tag_lower(r, t)
-        return b[3] + pady + 20      # generous gap before the next bubble
+        return b[3] + 11 + 20
 
-    def _redraw_conv(self):
+    def _draw_content(self):
         c = self.canvas
-        c.delete("conv")
-        y = 112                       # more space under the header divider
+        c.delete("content")
+        c.create_text(78, 34, text="JARVIS", anchor="w", fill=CYAN,
+                      font=("Segoe UI Semibold", 15), tags="content")
+        c.create_text(78, 54, text="voice assistant", anchor="w", fill=MUTE,
+                      font=("Segoe UI", 8), tags="content")
+        st = self.get_state()
+        c.create_text(W - 46, 34, text=STATE_LABEL.get(st, ""), anchor="e",
+                      fill=STATE_COLOR.get(st, CYAN), font=("Segoe UI", 9, "bold"),
+                      tags="content")
+        c.create_text(W - 20, 34, text="✕", anchor="e", fill=MUTE,
+                      font=("Segoe UI", 11, "bold"), tags=("content", "x"))
+        c.create_line(20, 74, W - 20, 74, fill=EDGE, tags="content")
+        # transparent header drag strip
+        c.create_rectangle(70, 20, W - 60, 66, outline="", fill="", tags=("content", "hdr"))
+
+        y = 100
         user, reply = self.get_user(), self.get_reply()
         if user:
             y = self._bubble(y, "right", user, USER_BG, USER_FG)
@@ -193,57 +207,120 @@ class HUD:
             y = self._bubble(y, "left", reply, JV_BG, JV_FG)
         log = self.get_log()
         if log:
-            c.create_text(W // 2, min(y + 6, H - 66), text=log, fill=MUTE,
-                          font=("Consolas", 8), tags="conv")
+            c.create_text(W // 2, min(y + 6, H - 70), text=log, fill=MUTE,
+                          font=("Consolas", 8), tags="content")
 
-    # --- orb + loop ----------------------------------------------------------
+        # input bar + send/mic buttons
+        iy0, iy1 = H - 52, H - 16
+        c.create_polygon(_rr(16, iy0, W - 74, iy1, 16), smooth=True, fill=CARD2,
+                         outline=EDGE, width=1, tags="content")
+        c.create_oval(W - 64, iy0, W - 30, iy0 + 34, fill=CARD2, outline=EDGE, tags=("content", "send"))
+        c.create_text(W - 47, iy0 + 17, text="➤", fill=CYAN, font=("Segoe UI", 12), tags=("content", "send"))
 
-    def _draw_orb(self, col, st):
+    # --- orb -----------------------------------------------------------------
+
+    def _draw_orb(self, ox, oy, orad, col, st):
         c = self.canvas
-        c.delete("orb")
         spin = self._t * (5 if st == "think" else 1.4)
-        for i in range(28):
-            a = spin + i * (2 * math.pi / 28)
+        n = 28
+        for i in range(n):
+            a = spin + i * (2 * math.pi / n)
             long = (i % 4 == 0)
-            r0, r1 = OR + 3, OR + (9 if long else 6)
-            c.create_line(OCX + r0 * math.cos(a), OCY + r0 * math.sin(a),
-                          OCX + r1 * math.cos(a), OCY + r1 * math.sin(a),
+            r0, r1 = orad + 3, orad + (10 if long else 6)
+            c.create_line(ox + r0 * math.cos(a), oy + r0 * math.sin(a),
+                          ox + r1 * math.cos(a), oy + r1 * math.sin(a),
                           fill=_blend(CARD, col, 0.4 + 0.6 * (0.5 + 0.5 * math.sin(a * 3 - spin))),
                           width=1, tags="orb")
-        for rr, sweep, sp in [(OR - 2, 70, -spin), (OR - 9, 50, spin * 1.6)]:
+        for rr, sweep, sp in [(orad - 2, 70, -spin), (orad - 10, 50, spin * 1.6)]:
             deg = math.degrees(sp)
             for seg in range(3):
-                c.create_arc(OCX - rr, OCY - rr, OCX + rr, OCY + rr,
-                             start=deg + seg * 120, extent=sweep, style="arc",
-                             outline=col, width=1.5, tags="orb")
+                c.create_arc(ox - rr, oy - rr, ox + rr, oy + rr, start=deg + seg * 120,
+                             extent=sweep, style="arc", outline=col, width=1.5, tags="orb")
         if st == "speak":
             for j in range(2):
                 p = (self._t * 0.7 + j / 2) % 1.0
-                rr = 8 + p * (OR - 4)
-                c.create_oval(OCX - rr, OCY - rr, OCX + rr, OCY + rr,
+                rr = orad * 0.3 + p * orad
+                c.create_oval(ox - rr, oy - rr, ox + rr, oy + rr,
                               outline=_blend(col, CARD, p), width=1, tags="orb")
-        cr = 8 + self._amp * 8
-        c.create_oval(OCX - cr, OCY - cr, OCX + cr, OCY + cr,
+        cr = orad * 0.34 + self._amp * orad * 0.4
+        c.create_oval(ox - cr, oy - cr, ox + cr, oy + cr,
                       fill=_blend(col, "#ffffff", 0.15 + self._amp * 0.4),
                       outline=col, width=1.5, tags="orb")
 
+    # --- loop ----------------------------------------------------------------
+
     def _poll(self):
+        c = self.canvas
         st = self.get_state()
         col = STATE_COLOR.get(st, CYAN)
         self._t += 0.06
-        target = min(1.0, self.get_level() / 0.05) if st == "listen" else \
+
+        # activity: while talking/thinking/speaking, force open + keep alive
+        if st != "idle":
+            self.target = 1.0
+            self._touch()
+        elif self.target > 0.5 and not self._focused() \
+                and time.time() - self._last_act > COLLAPSE_AFTER:
+            self._collapse()
+
+        # animate expansion (ease)
+        self.e += (self.target - self.e) * 0.22
+        e = max(0.0, min(1.0, self.e))
+        ease = e * e * (3 - 2 * e)
+
+        target_amp = min(1.0, self.get_level() / 0.05) if st == "listen" else \
             (0.6 + 0.4 * math.sin(self._t * 6)) if st == "speak" else 0.0
-        self._amp += (target - self._amp) * 0.3
+        self._amp += (target_amp - self._amp) * 0.3
 
-        self._draw_orb(col, st)
-        self.canvas.itemconfig(self.status, text=STATE_LABEL.get(st, ""), fill=col)
+        c.delete("orb")
+        c.delete("card")
 
-        sig = (self.get_user(), self.get_reply(), self.get_log())
-        if sig != self._last:
-            self._last = sig
-            self._redraw_conv()
+        # card grows from collapsed button to full panel
+        rect = [_lerp(RECT_C[i], RECT_E[i], ease) for i in range(4)]
+        rad = _lerp(22, 22, ease)
+        c.create_polygon(_rr(rect[0], rect[1], rect[2], rect[3], rad), smooth=True,
+                         fill=CARD, outline=EDGE, width=1.5, tags="card")
 
-        self.root.after(60, self._poll)
+        # content only when nearly open
+        if ease > 0.82:
+            if not c.find_withtag("content") or self._last_sig != self._sig():
+                self._last_sig = self._sig()
+                self._draw_content()
+            self._place_entry(True)
+        else:
+            c.delete("content")
+            self._place_entry(False)
+
+        # orb interpolates corner ↔ header
+        ox = _lerp(ORB_C[0], ORB_E[0], ease)
+        oy = _lerp(ORB_C[1], ORB_E[1], ease)
+        orad = _lerp(ORB_C[2], ORB_E[2], ease)
+        c.addtag_withtag("orb", c.create_oval(ox - orad - 6, oy - orad - 6,
+                         ox + orad + 6, oy + orad + 6, outline="", fill="", tags="orb"))
+        self._draw_orb(ox, oy, orad, col, st)
+        c.tag_raise("orb")
+        c.tag_raise("content")
+
+        self.root.after(40, self._poll)
+
+    def _sig(self):
+        return (self.get_user(), self.get_reply(), self.get_log(), self.get_state())
+
+    def _focused(self):
+        try:
+            return self.root.focus_get() is self.entry
+        except Exception:
+            return False
+
+    def _place_entry(self, show):
+        if show:
+            if not self.entry.winfo_ismapped():
+                self.entry.place(x=24, y=H - 42, width=W - 150, height=24)
+                if not self.entry_var.get():
+                    self.entry_var.set("")
+        else:
+            if self.entry.winfo_ismapped():
+                self.entry.place_forget()
 
     def run(self):
         try:
