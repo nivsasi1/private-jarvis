@@ -18,8 +18,10 @@ from freewhisper.recorder import Recorder, rms
 from freewhisper.transcriber import Transcriber
 
 from .brain import Brain
+from .memory import Memory
 from .speaker import Speaker
 from .tools import Tools
+from .wakeword import WakeWord
 
 LOG_PATH = Path(__file__).resolve().parent.parent / "jarvis.log"
 
@@ -36,8 +38,13 @@ class Jarvis:
         self.recorder = Recorder(cfg.input_device)
         self.stt = Transcriber(cfg)
         self.speaker = Speaker(cfg)
-        self.tools = Tools(on_event=self._on_tool)
-        self.brain = Brain(cfg, self.tools)
+        self.memory = Memory(cfg)
+        self.tools = Tools(on_event=self._on_tool, memory=self.memory)
+        self.brain = Brain(cfg, self.tools, memory=self.memory)
+        self.wake = WakeWord(on_wake=self.talk,
+                             is_busy=lambda: self.state != "idle",
+                             threshold=getattr(cfg, "wake_threshold", 0.5),
+                             device=cfg.input_device)
         self.state = "idle"        # idle | listen | think | speak
         self.user_text = ""
         self.reply = ""
@@ -148,8 +155,10 @@ class Jarvis:
         keyboard.add_hotkey(self.cfg.talk_hotkey, self.talk)
 
         brain_kind = "Claude (tools)" if self.brain.using_claude else "local Ollama (chat)"
-        print(f"Jarvis online. Brain: {brain_kind}. "
-              f"Press {self.cfg.talk_hotkey} or click the core to talk.")
+        print(f"Jarvis online. Brain: {brain_kind}. Memory: {self.memory.count()} facts. "
+              f"Press {self.cfg.talk_hotkey}, say 'Hey Jarvis', or click the orb.")
+        if getattr(self.cfg, "wake_enabled", True):
+            self.wake.start()
         greet = "ג'רוויס מוכן." if not self.brain.using_claude else "Jarvis online and ready."
         self.speaker.speak(greet)
 
@@ -191,10 +200,14 @@ def main():
     args = ap.parse_args()
     cfg = config_mod.load()
     if args.check:
-        b = Brain(cfg, Tools())
+        mem = Memory(cfg)
+        b = Brain(cfg, Tools(), memory=mem)
+        wake = WakeWord(lambda: None, lambda: False)
         print("brain :", "Claude" if b.using_claude else "Ollama (no ANTHROPIC_API_KEY)")
-        print("talk  :", cfg.talk_hotkey)
+        print("talk  :", cfg.talk_hotkey, "| say 'Hey Jarvis'")
         print("voice :", cfg.voice_he, "/", cfg.voice_en)
+        print("memory:", mem.count(), "facts")
+        print("wake  :", "openWakeWord ready" if wake.available() else "unavailable")
         return
     _keep = _lock()
     Jarvis(cfg).run()

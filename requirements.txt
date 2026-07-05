@@ -12,3 +12,4 @@ pytest>=8
 edge-tts>=6.1          # TTS voice (Hebrew + English)
 anthropic>=0.40        # optional cloud brain with tools
 selenium>=4.20         # visible browser Jarvis drives
+openwakeword>=0.6      # "Hey Jarvis" wake word (local, CPU)

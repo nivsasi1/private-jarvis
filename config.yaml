@@ -16,6 +16,9 @@ voice_rate: "+8%"
 anthropic_key: ""               # leave blank — put the real key in secret.yaml (gitignored)
 claude_model: claude-sonnet-5   # cloud brain w/ tools (used when a key is present)
 chat_model: gemma3:12b          # local Ollama brain (used when no key)
+embed_model: bge-m3             # multilingual embeddings for memory (strong Hebrew)
+wake_enabled: true              # listen for "Hey Jarvis" (openWakeWord)
+wake_threshold: 0.5             # 0-1; raise if it triggers by accident
 
 silence_seconds: 2              # stop recording after this much quiet
 silence_threshold: 0.008        # mic level counted as "talking" (see --test-mic)

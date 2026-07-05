@@ -39,6 +39,13 @@ SCHEMAS = [
      "input_schema": {"type": "object", "properties": {}}},
     {"name": "list_tabs", "description": "List open browser tabs.",
      "input_schema": {"type": "object", "properties": {}}},
+    {"name": "remember", "description": "Save a fact about the user to long-term memory "
+     "(preferences, names, facts they tell you to remember).",
+     "input_schema": {"type": "object", "properties": {
+         "fact": {"type": "string"}}, "required": ["fact"]}},
+    {"name": "recall", "description": "Search the user's long-term memory for relevant facts.",
+     "input_schema": {"type": "object", "properties": {
+         "query": {"type": "string"}}, "required": ["query"]}},
 ]
 
 APPS = {
@@ -50,9 +57,10 @@ APPS = {
 
 
 class Tools:
-    def __init__(self, on_event=None):
+    def __init__(self, on_event=None, memory=None):
         self.on_event = on_event or (lambda s: None)
         self.browser = BrowserController()
+        self.memory = memory
 
     def _ev(self, s):
         self.on_event(s)
@@ -118,3 +126,16 @@ class Tools:
     def t_list_tabs(self):
         tabs = self.browser.list_pages()
         return "\n".join(tabs) if tabs else "no tabs open"
+
+    # --- memory --------------------------------------------------------------
+
+    def t_remember(self, fact):
+        self._ev(f"🧠 remembering: {fact[:30]}")
+        return self.memory.remember(fact) if self.memory else "(no memory)"
+
+    def t_recall(self, query):
+        self._ev(f"🧠 recalling: {query[:30]}")
+        if not self.memory:
+            return "(no memory)"
+        hits = self.memory.recall(query)
+        return "\n".join(f"- {h}" for h in hits) if hits else "nothing relevant"

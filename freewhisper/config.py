@@ -46,6 +46,9 @@ class Config:
     anthropic_key: str = ""
     claude_model: str = "claude-sonnet-5"
     chat_model: str = "gemma3:12b"
+    embed_model: str = "bge-m3"
+    wake_enabled: bool = True
+    wake_threshold: float = 0.5
 
 
 SECRET_PATH = CONFIG_PATH.parent / "secret.yaml"

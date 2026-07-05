@@ -16,15 +16,19 @@ PERSONA = (
     "You speak back out loud, so keep replies short and natural — a sentence or two, no lists "
     "unless asked. Reply in the user's language (Hebrew or English). "
     "You have tools to open/close real browser pages, check weather, time, files, and launch apps. "
-    "Use them when useful and narrate briefly. Before anything that spends money or is destructive, "
+    "You also have long-term memory: call remember() when the user shares something worth keeping "
+    "(preferences, names, facts, 'remember that...'), and recall() when you need past context. "
+    "Relevant memories are also injected for you each turn. "
+    "Use tools when useful and narrate briefly. Before anything that spends money or is destructive, "
     "stop and ask for explicit confirmation first."
 )
 
 
 class Brain:
-    def __init__(self, cfg, tools):
+    def __init__(self, cfg, tools, memory=None):
         self.cfg = cfg
         self.tools = tools
+        self.memory = memory
         self.history = []          # [{role, content}]
         self.max_turns = 12
         self.api_key = os.environ.get("ANTHROPIC_API_KEY") or getattr(cfg, "anthropic_key", "")
@@ -40,23 +44,33 @@ class Brain:
     def using_claude(self) -> bool:
         return self._client is not None
 
+    def _system(self, user_text: str) -> str:
+        """Persona + any relevant remembered facts for this turn."""
+        if self.memory:
+            facts = self.memory.recall(user_text, 4)
+            if facts:
+                return PERSONA + "\n\nמה שאתה זוכר על המשתמש:\n" + \
+                    "\n".join(f"- {f}" for f in facts)
+        return PERSONA
+
     def think(self, user_text: str) -> str:
         self.history.append({"role": "user", "content": user_text})
         self.history = self.history[-self.max_turns * 2:]
-        reply = self._think_claude() if self.using_claude else self._think_ollama()
+        system = self._system(user_text)
+        reply = self._think_claude(system) if self.using_claude else self._think_ollama(system)
         self.history.append({"role": "assistant", "content": reply})
         return reply
 
     # --- Claude (tools) ------------------------------------------------------
 
-    def _think_claude(self) -> str:
+    def _think_claude(self, system) -> str:
         from .tools import SCHEMAS
         msgs = [m for m in self.history]
         for _ in range(6):  # tool-use rounds
             resp = self._client.messages.create(
                 model=getattr(self.cfg, "claude_model", "claude-sonnet-5"),
                 max_tokens=1024,
-                system=PERSONA,
+                system=system,
                 tools=SCHEMAS,
                 messages=msgs,
             )
@@ -75,13 +89,13 @@ class Brain:
 
     # --- Ollama (chat only) --------------------------------------------------
 
-    def _think_ollama(self) -> str:
+    def _think_ollama(self, system) -> str:
         try:
             r = requests.post(
                 f"{self.cfg.llm.url}/api/chat",
                 json={
                     "model": getattr(self.cfg, "chat_model", self.cfg.llm.model),
-                    "messages": [{"role": "system", "content": PERSONA}] + self.history,
+                    "messages": [{"role": "system", "content": system}] + self.history,
                     "stream": False, "keep_alive": -1,
                     "options": {"temperature": 0.6},
                 },

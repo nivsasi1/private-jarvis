@@ -30,10 +30,23 @@ tokens.** Without a key, Jarvis still chats fully locally.
 ## Tools (Claude brain)
 
 `get_time` · `get_weather` · `open_app` · `search_files` · `open_url` ·
-`read_page` · `close_tab` · `close_browser` · `list_tabs`
+`read_page` · `close_tab` · `close_browser` · `list_tabs` · `remember` · `recall`
 
 The browser is real Chrome via Selenium — Jarvis opens/closes tabs visibly.
 Anything that spends money or is destructive requires your explicit confirmation first.
+
+## Wake word — "Hey Jarvis"
+
+Just say **"Hey Jarvis"** (no hotkey) and it starts listening. Uses openWakeWord's
+pretrained model, runs locally on CPU, and only triggers when Jarvis is idle (so it
+won't wake on its own voice). Toggle with `wake_enabled` / tune `wake_threshold` in config.
+
+## Memory
+
+Jarvis has persistent long-term memory (SQLite + `bge-m3` embeddings via Ollama).
+Say "remember that…" and it saves; relevant facts are auto-recalled into context every
+turn, so it just *knows* things later ("what's my cat's name?"). Semantic, multilingual
+(strong Hebrew). Stored in `jarvis_memory.db` (gitignored, stays on your machine).
 
 ## Voice
 

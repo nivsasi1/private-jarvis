@@ -5,3 +5,4 @@ __pycache__/
 freewhisper.log
 jarvis.log
 secret.yaml
+jarvis_memory.db
