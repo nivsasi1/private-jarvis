@@ -54,39 +54,75 @@ class Brain:
                     "\n".join(f"- {f}" for f in facts)
         return PERSONA
 
-    def think(self, user_text: str) -> str:
+    def think(self, user_text: str, on_delta=None, on_sentence=None) -> str:
+        """Return the reply. If streaming callbacks are given (Claude path),
+        on_delta(chunk) fires per token and on_sentence(sentence) per finished
+        sentence so the caller can show text live and speak sentence-by-sentence."""
         self.history.append({"role": "user", "content": user_text})
         self.history = self.history[-self.max_turns * 2:]
         system = self._system(user_text)
-        reply = self._think_claude(system) if self.using_claude else self._think_ollama(system)
+        if self.using_claude:
+            reply = self._think_claude(system, on_delta, on_sentence)
+        else:
+            reply = self._think_ollama(system)
+            if on_sentence:
+                on_sentence(reply)      # local path doesn't stream — speak it whole
         self.history.append({"role": "assistant", "content": reply})
         return reply
 
     # --- Claude (tools) ------------------------------------------------------
 
-    def _think_claude(self, system) -> str:
+    def _think_claude(self, system, on_delta=None, on_sentence=None) -> str:
+        import re
+
         from .tools import SCHEMAS
+        buf = [""]
+        all_text = []
+        _END = re.compile(r"[.!?…]+(?:\s|$)|\n")
+
+        def emit(text):
+            all_text.append(text)
+            if on_delta:
+                on_delta(text)
+            buf[0] += text
+            while on_sentence:
+                m = _END.search(buf[0])
+                if not m:
+                    break
+                s, buf[0] = buf[0][:m.end()].strip(), buf[0][m.end():]
+                if s:
+                    on_sentence(s)
+
+        def flush():
+            s = buf[0].strip()
+            buf[0] = ""
+            if s and on_sentence:
+                on_sentence(s)
+
+        model = getattr(self.cfg, "claude_model", "claude-sonnet-5")
         msgs = [m for m in self.history]
         for _ in range(6):  # tool-use rounds
-            resp = self._client.messages.create(
-                model=getattr(self.cfg, "claude_model", "claude-sonnet-5"),
-                max_tokens=1024,
-                system=system,
-                tools=SCHEMAS,
-                messages=msgs,
-            )
-            if resp.stop_reason == "tool_use":
-                msgs.append({"role": "assistant", "content": resp.content})
+            with self._client.messages.stream(model=model, max_tokens=1024,
+                                              system=system, tools=SCHEMAS,
+                                              messages=msgs) as stream:
+                for event in stream:
+                    if event.type == "content_block_delta" and \
+                            getattr(event.delta, "type", "") == "text_delta":
+                        emit(event.delta.text)
+                final = stream.get_final_message()
+            flush()  # speak any remaining narration before running tools
+            if final.stop_reason == "tool_use":
+                msgs.append({"role": "assistant", "content": final.content})
                 results = []
-                for block in resp.content:
+                for block in final.content:
                     if block.type == "tool_use":
                         out = self.tools.dispatch(block.name, block.input)
                         results.append({"type": "tool_result", "tool_use_id": block.id,
                                         "content": str(out)})
                 msgs.append({"role": "user", "content": results})
                 continue
-            return "".join(b.text for b in resp.content if b.type == "text").strip()
-        return "לא הצלחתי לסיים את הפעולה."
+            return "".join(all_text).strip() or "לא הצלחתי לסיים."
+        return "".join(all_text).strip() or "לא הצלחתי לסיים את הפעולה."
 
     # --- Ollama (chat only) --------------------------------------------------
 

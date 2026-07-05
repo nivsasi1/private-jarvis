@@ -126,13 +126,22 @@ class Jarvis:
                 print(f"[you] {text}")
                 self.user_text = text
                 self.reply = ""
-                reply = self.brain.think(text)
+                gen = self.speaker.start_turn()
+                started = [False]
+
+                def on_delta(chunk):
+                    if not started[0]:
+                        started[0] = True
+                        self.state = "speak"     # orb goes green when speech begins
+                    self.reply += chunk
+
+                reply = self.brain.think(
+                    text, on_delta=on_delta,
+                    on_sentence=lambda s: self.speaker.feed(gen, s))
                 print(f"[jarvis] {reply}")
-                self.reply = reply
+                self.reply = reply or self.reply
                 self.state = "speak"
-                done = threading.Event()
-                self.speaker.speak(reply, on_done=done.set)
-                done.wait(60)
+                self.speaker.wait_idle(120)      # let the queued speech finish
             except Exception:
                 traceback.print_exc()
             finally:
