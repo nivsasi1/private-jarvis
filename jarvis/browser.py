@@ -45,19 +45,27 @@ class BrowserController:
 
     def _ensure(self):
         if self._driver is None:
+            import os
+
             from selenium import webdriver
+            # a persistent Jarvis-only Chrome profile (kept out of OneDrive, separate
+            # from the user's main Chrome) so logins like Gmail stick between sessions
+            profile = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
+                                   "JarvisBrowser")
             opts = webdriver.ChromeOptions()
             opts.add_argument("--start-maximized")
+            opts.add_argument(f"--user-data-dir={profile}")
+            opts.add_argument("--profile-directory=Default")
             opts.add_experimental_option("excludeSwitches", ["enable-automation"])
             opts.add_experimental_option("detach", True)
             self._driver = webdriver.Chrome(options=opts)
-            self._handles = list(self._driver.window_handles)
+            self._handles = []          # opened tabs; the initial blank tab is reused
 
     def _do_open(self, url):
         self._ensure()
         if "://" not in url:
             url = "https://" + url
-        if self._handles and len(self._driver.window_handles) <= len(self._handles):
+        if self._handles:               # reuse the initial blank tab for the first open
             self._driver.switch_to.new_window("tab")
         self._driver.get(url)
         h = self._driver.current_window_handle

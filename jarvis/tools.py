@@ -46,12 +46,13 @@ SCHEMAS = [
     {"name": "recall", "description": "Search the user's long-term memory for relevant facts.",
      "input_schema": {"type": "object", "properties": {
          "query": {"type": "string"}}, "required": ["query"]}},
-    {"name": "read_emails", "description": "Read the user's recent Gmail inbox "
-     "(senders, subjects, snippets). Summarize naturally when asked.",
+    {"name": "read_emails", "description": "Read/show/summarize the user's recent Gmail "
+     "inbox (senders, subjects, snippets). ALWAYS use this for anything about their email "
+     "— never open gmail.com in the browser (that browser isn't logged into their account).",
      "input_schema": {"type": "object", "properties": {
          "count": {"type": "integer", "description": "how many (default 8)"}}}},
-    {"name": "search_emails", "description": "Search Gmail with a query like "
-     "'from:bank', 'is:unread', 'subject:invoice'.",
+    {"name": "search_emails", "description": "Search the user's Gmail with a query like "
+     "'from:bank', 'is:unread', 'subject:invoice'. Use this (not the browser) for email.",
      "input_schema": {"type": "object", "properties": {
          "query": {"type": "string"}}, "required": ["query"]}},
     {"name": "see_screen", "description": "Capture and look at the user's current "
