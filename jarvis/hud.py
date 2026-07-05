@@ -170,23 +170,22 @@ class HUD:
 
     def _bubble(self, y, side, text, bg, fg):
         c = self.canvas
-        maxw = 250
-        pad = 10
-        anchor = "e" if side == "right" else "w"
-        tx = W - 24 if side == "right" else 24
+        maxw = 236
+        padx, pady = 14, 11
+        tx = W - 28 if side == "right" else 28
         t = c.create_text(tx, y, text=text, anchor="n" + ("e" if side == "right" else "w"),
-                          fill=fg, width=maxw, font=("Segoe UI", 10),
+                          fill=fg, width=maxw, font=("Segoe UI", 11),
                           justify="right", tags="conv")
         b = c.bbox(t)
-        rect = _rr(b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad, 12)
+        rect = _rr(b[0] - padx, b[1] - pady, b[2] + padx, b[3] + pady, 14)
         r = c.create_polygon(rect, smooth=True, fill=bg, outline="", tags="conv")
         c.tag_lower(r, t)
-        return b[3] + pad + 10
+        return b[3] + pady + 20      # generous gap before the next bubble
 
     def _redraw_conv(self):
         c = self.canvas
         c.delete("conv")
-        y = 96
+        y = 112                       # more space under the header divider
         user, reply = self.get_user(), self.get_reply()
         if user:
             y = self._bubble(y, "right", user, USER_BG, USER_FG)
@@ -194,7 +193,7 @@ class HUD:
             y = self._bubble(y, "left", reply, JV_BG, JV_FG)
         log = self.get_log()
         if log:
-            c.create_text(W // 2, min(y + 4, H - 70), text=log, fill=MUTE,
+            c.create_text(W // 2, min(y + 6, H - 66), text=log, fill=MUTE,
                           font=("Consolas", 8), tags="conv")
 
     # --- orb + loop ----------------------------------------------------------
