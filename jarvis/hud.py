@@ -223,7 +223,8 @@ class HUD:
 
     def _draw_orb(self, ox, oy, orad, col, st):
         c = self.canvas
-        spin = self._t * (5 if st == "think" else 1.4)
+        # calm, slow spin at rest; livelier while listening/speaking; fast when thinking
+        spin = self._t * (5 if st == "think" else 0.7 if st == "idle" else 1.4)
         n = 28
         for i in range(n):
             a = spin + i * (2 * math.pi / n)
