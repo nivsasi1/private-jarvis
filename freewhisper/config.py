@@ -48,8 +48,15 @@ class Config:
     chat_model: str = "gemma3:12b"
 
 
+SECRET_PATH = CONFIG_PATH.parent / "secret.yaml"
+
+
 def load(path: Path = CONFIG_PATH) -> Config:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    # overlay gitignored secrets (API keys) so they never live in config.yaml
+    if SECRET_PATH.exists():
+        secret = yaml.safe_load(SECRET_PATH.read_text(encoding="utf-8")) or {}
+        raw.update({k: v for k, v in secret.items() if v})
     llm = LLMConfig(**raw.pop("llm", {}))
     known = {k: v for k, v in raw.items() if k in Config.__dataclass_fields__}
     return Config(llm=llm, **known)

@@ -13,7 +13,7 @@ talk_hotkey: ctrl+shift+j       # press or click the core to talk to Jarvis
 voice_he: he-IL-AvriNeural      # edge-tts Hebrew voice (AvriNeural=male, HilaNeural=female)
 voice_en: en-GB-RyanNeural      # edge-tts English voice (British, Jarvis-ish)
 voice_rate: "+8%"
-anthropic_key: ""               # paste your Anthropic API key (or set ANTHROPIC_API_KEY env)
+anthropic_key: ""               # leave blank — put the real key in secret.yaml (gitignored)
 claude_model: claude-sonnet-5   # cloud brain w/ tools (used when a key is present)
 chat_model: gemma3:12b          # local Ollama brain (used when no key)
 

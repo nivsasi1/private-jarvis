@@ -39,7 +39,8 @@ class Jarvis:
         self.tools = Tools(on_event=self._on_tool)
         self.brain = Brain(cfg, self.tools)
         self.state = "idle"        # idle | listen | think | speak
-        self.caption = ""
+        self.user_text = ""
+        self.reply = ""
         self.logline = ""
         self._hud = None
         self.busy = threading.Lock()
@@ -59,11 +60,20 @@ class Jarvis:
             self.speaker.stop()      # barge-in: silence Jarvis and listen again
             self._start_listen()
 
+    def submit_text(self, text):
+        """Typed input from the HUD field — same brain path as voice, no STT."""
+        text = (text or "").strip()
+        if not text or self.state in ("think", "speak"):
+            return
+        if self.recorder.recording:
+            self.recorder.stop()
+        threading.Thread(target=self._respond, args=(text,), daemon=True).start()
+
     def _start_listen(self):
         try:
             self.recorder.start()
             self.state = "listen"
-            self.caption = "…"
+            self.user_text = "…"
             print("[rec] ● listening")
             threading.Thread(target=self._watchdog, daemon=True).start()
         except Exception as e:
@@ -93,18 +103,23 @@ class Jarvis:
     def _process(self, audio):
         with self.busy:
             self.state = "think"
+            text = self.stt.transcribe(audio, self.cfg.language)
+            if not text:
+                self.user_text = "לא שמעתי"
+                self.state = "idle"
+                return
+        self._respond(text)
+
+    def _respond(self, text):
+        with self.busy:
+            self.state = "think"
             try:
-                lang = self.cfg.language
-                text = self.stt.transcribe(audio, lang)
-                if not text:
-                    self.caption = "לא שמעתי"
-                    self.state = "idle"
-                    return
                 print(f"[you] {text}")
-                self.caption = text
+                self.user_text = text
+                self.reply = ""
                 reply = self.brain.think(text)
                 print(f"[jarvis] {reply}")
-                self.caption = reply
+                self.reply = reply
                 self.state = "speak"
                 done = threading.Event()
                 self.speaker.speak(reply, on_done=done.set)
@@ -143,9 +158,11 @@ class Jarvis:
             self._hud = HUD(
                 get_state=lambda: self.state,
                 get_level=lambda: self.recorder.recent_rms(0.08) if self.recorder.recording else 0.0,
-                get_caption=lambda: self.caption,
+                get_user=lambda: self.user_text,
+                get_reply=lambda: self.reply,
                 get_log=lambda: self.logline,
                 on_talk=self.talk,
+                on_submit=self.submit_text,
                 on_quit=self.quit,
             )
             self._hud.run()
