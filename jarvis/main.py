@@ -165,7 +165,7 @@ class Jarvis:
         try:
             from freewhisper import screens
             from .hud import HUD, H, W
-            origin = screens.corner(self.cfg.screen, W, H, margin_r=16, margin_b=16)
+            origin = screens.corner(self.cfg.screen, W, H, side="right", margin_x=16, margin_b=16)
             self._hud = HUD(
                 get_state=lambda: self.state,
                 get_level=lambda: self.recorder.recent_rms(0.08) if self.recorder.recording else 0.0,

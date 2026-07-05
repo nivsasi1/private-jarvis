@@ -52,9 +52,10 @@ def pick(which="secondary"):
     return min(non, key=lambda m: m["x"]) if non else mons[0]
 
 
-def corner(which, w, h, margin_r=16, margin_b=16):
-    """Bottom-right origin (top-left x,y) for a w×h window on the chosen monitor."""
+def corner(which, w, h, side="right", margin_x=16, margin_b=16):
+    """Bottom-left/right origin (top-left x,y) for a w×h window on the chosen monitor."""
     m = pick(which)
     if not m:
         return None
-    return (m["x"] + m["w"] - w - margin_r, m["y"] + m["h"] - h - margin_b)
+    x = m["x"] + margin_x if side == "left" else m["x"] + m["w"] - w - margin_x
+    return (x, m["y"] + m["h"] - h - margin_b)
